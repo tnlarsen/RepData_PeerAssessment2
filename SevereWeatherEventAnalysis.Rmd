@@ -1,0 +1,74 @@
+# Severe Weather Event Analysis - NOAA Storm Database
+
+## Synopsis
+
+## Data Processing
+
+```{r initialization}
+library("stringr")
+
+```
+
+
+
+```{r download, echo=TRUE}
+data.dir = "./data"
+zip.filename = file.path(data.dir, "StormData.csv.bz2")
+url <- 'https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2'
+
+if(!file.exists(zip.filename)) {
+    dir.create(data.dir)
+    download.file(url, zip.filename, method="curl")
+}
+
+```
+
+```{r read, echo=TRUE, cache=TRUE}
+# Note: the assignment is inconsistent on whether analysis should start from the csv file or from the csv.bz2 file. I have chosen the later.
+storm.data <- read.csv(bzfile(zip.filename), 
+                       colClasses=c("EVTYPE"="character"))
+```
+
+XXXX: may not really be needed. XXXThe original data file contains 985 different event types in the `EVTYPE` column. This is largely due to casing, spelling errors, different words for the same event etc. The following section attempts to clean up this column.  
+```{r preprocess, echo=TRUE}
+
+event.type <- storm.data$EVTYPE # Get the EVTYPE's
+
+event.type <- tolower(event.type)
+event.type <- str_trim(event.type)
+
+
+storm.data$EVTYPE <- event.type # Set the fixed EVTYPE's back
+levels(as.factor(storm.data$EVTYPE))
+```
+
+Aggregate the data to find the most severe event types.
+```{r}
+fatalities.sum.per.evtype <- aggregate(FATALITIES~EVTYPE, data=storm.data, sum)
+fatalities.mean.per.evtype <- aggregate(FATALITIES~EVTYPE, data=storm.data, mean)
+
+injuries.sum.per.evtype <- aggregate(INJURIES~EVTYPE, data=storm.data, sum)
+injuries.mean.per.evtype <- aggregate(INJURIES~EVTYPE, data=storm.data, mean)
+
+fatalities.sum.per.evtype <- 
+    fatalities.sum.per.evtype[order(fatalities.sum.per.evtype$FATALITIES, decreasing = TRUE), ]
+
+fatalities.mean.per.evtype <- 
+    fatalities.mean.per.evtype[order(fatalities.mean.per.evtype$FATALITIES, decreasing = TRUE), ]
+
+injuries.sum.per.evtype <- 
+    injuries.sum.per.evtype[order(injuries.sum.per.evtype$INJURIES, decreasing = TRUE), ]
+
+injuries.mean.per.evtype <- 
+    injuries.mean.per.evtype[order(injuries.mean.per.evtype$INJURIES, decreasing = TRUE), ]
+
+
+
+
+
+```
+
+
+
+
+## Results
