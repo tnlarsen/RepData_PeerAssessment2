@@ -4,10 +4,11 @@
 
 ## Data Processing
 
-```{r initialization}
+```{r initialization, echo=TRUE}
 library(stringr)
 library(knitr)
 library(ggplot2)
+library(gridExtra)
 
 ```
 
@@ -108,15 +109,24 @@ injuries.sum.per.evtype <-
 
 ```
 
-
-```{r ten_most_fatal, echo=TRUE}
-ggplot(data=fatalities.sum.per.evtype[1:10,], 
+XXX: need to make it more clear that it is one figure with two plots
+```{r ten_most_health_consequences, echo=TRUE}
+p1 <- ggplot(data=fatalities.sum.per.evtype[1:10,], 
     aes(x=reorder(EVTYPE, order(FATALITIES)),
         y=FATALITIES)) + 
     geom_bar(fill="#DD8888", stat="identity") +
     xlab("Event type") +
     ylab("Total fatalities") +
     coord_flip()
-```
 
+p2 <- ggplot(data=injuries.sum.per.evtype[1:10,], 
+    aes(x=reorder(EVTYPE, order(INJURIES)),
+        y=INJURIES)) + 
+    geom_bar(fill="#DD8888", stat="identity") +
+    xlab("Event type") +
+    ylab("Total injuries") +
+    coord_flip()
+
+grid.arrange(p1,p2)
+```
 
