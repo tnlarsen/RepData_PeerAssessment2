@@ -5,11 +5,13 @@
 ## Data Processing
 
 ```{r initialization}
-library("stringr")
+library(stringr)
+library(knitr)
+library(ggplot2)
 
 ```
 
-
+### Download data
 
 ```{r download, echo=TRUE}
 data.dir = "./data"
@@ -23,52 +25,98 @@ if(!file.exists(zip.filename)) {
 
 ```
 
+### Read data
+
 ```{r read, echo=TRUE, cache=TRUE}
 # Note: the assignment is inconsistent on whether analysis should start from the csv file or from the csv.bz2 file. I have chosen the later.
 storm.data <- read.csv(bzfile(zip.filename), 
                        colClasses=c("EVTYPE"="character"))
 ```
 
-XXXX: may not really be needed. XXXThe original data file contains 985 different event types in the `EVTYPE` column. This is largely due to casing, spelling errors, different words for the same event etc. The following section attempts to clean up this column.  
-```{r preprocess, echo=TRUE}
+### Filtering
+This analysis will address questions regarding population health and economic consequences. Therefore it is reasonable to only consider events where there was recorded either fatalities, injuries, property damage or crop damage or any combination of these. As a result the data is filtered based on these criteria.
 
-event.type <- storm.data$EVTYPE # Get the EVTYPE's
+```{r filter, echo=TRUE}
+storm.data.filtered <- storm.data[storm.data$FATALITIES > 0 | 
+                                      storm.data$INJURIES > 0 | 
+                                      storm.data$PROPDMG > 0 | 
+                                      storm.data$CROPDMG > 0, ]
+
+```
+
+This filtering brings the number of recorded events down from **`r dim(storm.data)[1]`** to **`r dim(storm.data.filtered)[1]`**. Also it reduces the number of unique event types from **`r length(unique(storm.data$EVTYPE))`** to **`r length(unique(storm.data.filtered$EVTYPE))`**.
+
+### Cleanup
+Even with the above data reduction the number of event types is still excessive. This is largely due to casing, spelling errors, different words for the same event etc. The following section attempts to partially clean up this column a bit. Only event types with a significant number of entries and where the change is obvious are handled.
+```{r cleanup, echo=TRUE}
+
+event.type <- storm.data.filtered$EVTYPE # Get the EVTYPE's
 
 event.type <- tolower(event.type)
 event.type <- str_trim(event.type)
+event.type <- gsub('.*tstm.*|.*thunderstorm.*', 'thunderstorm', event.type)
+event.type <- gsub('.*high wind.*', 'high wind', event.type)
+event.type <- gsub('.*tornado.*', 'tornado', event.type)
+event.type <- gsub('.*hail.*', 'hail', event.type)
+event.type <- gsub('.*flash flood.*', 'flash flood', event.type)
+event.type <- gsub('.*heat.*', 'heat', event.type)
+event.type <- gsub('.*tropical storm.*', 'tropical storm', event.type)
+event.type <- gsub('.*hurricane.*', 'hurricane', event.type)
+event.type <- gsub('.*rip current.*', 'rip current', event.type)
+storm.data.filtered$EVTYPE <- event.type # Set the fixed EVTYPE's back
 
+#levels(as.factor(storm.data.filtered$EVTYPE))
+#length(levels(as.factor(storm.data.filtered$EVTYPE)))
 
-storm.data$EVTYPE <- event.type # Set the fixed EVTYPE's back
-levels(as.factor(storm.data$EVTYPE))
+countToShow <- 20
 ```
 
+The result of the above cleanup is that the data now contains **`r length(unique(storm.data.filtered$EVTYPE))`** unique event types. The `r countToShow` most recorded event types are listed in the below table: 
+
+```{r count_types, echo=TRUE, results='asis'}
+types.rle <- rle(storm.data.filtered$EVTYPE[(order(storm.data.filtered$EVTYPE))])
+
+reported.event.counts <- data.frame(EVTYPE = types.rle$values[order(types.rle$length, decreasing = TRUE)], 
+                                    COUNT = types.rle$length[order(types.rle$length, decreasing = TRUE)])
+
+kable(head(reported.event.counts[,1:2], n=countToShow), format="markdown")
+
+```
+
+These `r countToShow` event types account for **`r sum(reported.event.counts[1:countToShow,2])`** events corresponding to **`r sum(reported.event.counts[1:countToShow,2])/dim(storm.data.filtered)[1]*100`%** of the filtered data. Further investigations of the event types could reduce the number of types further but it does not seem necessary for the analysis.
+
+## Results
 Aggregate the data to find the most severe event types.
 ```{r}
-fatalities.sum.per.evtype <- aggregate(FATALITIES~EVTYPE, data=storm.data, sum)
-fatalities.mean.per.evtype <- aggregate(FATALITIES~EVTYPE, data=storm.data, mean)
+fatalities.sum.per.evtype <- aggregate(FATALITIES~EVTYPE, data=storm.data.filtered, sum)
+#fatalities.mean.per.evtype <- aggregate(FATALITIES~EVTYPE, data=storm.data.filtered, mean)
 
-injuries.sum.per.evtype <- aggregate(INJURIES~EVTYPE, data=storm.data, sum)
-injuries.mean.per.evtype <- aggregate(INJURIES~EVTYPE, data=storm.data, mean)
+injuries.sum.per.evtype <- aggregate(INJURIES~EVTYPE, data=storm.data.filtered, sum)
+#injuries.mean.per.evtype <- aggregate(INJURIES~EVTYPE, data=storm.data.filtered, mean)
 
 fatalities.sum.per.evtype <- 
     fatalities.sum.per.evtype[order(fatalities.sum.per.evtype$FATALITIES, decreasing = TRUE), ]
 
-fatalities.mean.per.evtype <- 
-    fatalities.mean.per.evtype[order(fatalities.mean.per.evtype$FATALITIES, decreasing = TRUE), ]
+#fatalities.mean.per.evtype <- 
+#    fatalities.mean.per.evtype[order(fatalities.mean.per.evtype$FATALITIES, decreasing = TRUE), ]
 
 injuries.sum.per.evtype <- 
     injuries.sum.per.evtype[order(injuries.sum.per.evtype$INJURIES, decreasing = TRUE), ]
 
-injuries.mean.per.evtype <- 
-    injuries.mean.per.evtype[order(injuries.mean.per.evtype$INJURIES, decreasing = TRUE), ]
-
-
-
-
+#injuries.mean.per.evtype <- 
+#    injuries.mean.per.evtype[order(injuries.mean.per.evtype$INJURIES, decreasing = TRUE), ]
 
 ```
 
 
+```{r ten_most_fatal, echo=TRUE}
+ggplot(data=fatalities.sum.per.evtype[1:10,], 
+    aes(x=reorder(EVTYPE, order(FATALITIES)),
+        y=FATALITIES)) + 
+    geom_bar(fill="#DD8888", stat="identity") +
+    xlab("Event type") +
+    ylab("Total fatalities") +
+    coord_flip()
+```
 
 
-## Results
