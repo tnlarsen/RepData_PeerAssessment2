@@ -28,7 +28,7 @@ if(!file.exists(zip.filename)) {
 
 ### Read data
 
-```{r read, echo=TRUE, cache=TRUE}
+```{r read, echo=TRUE, cache=FALSE}
 # Note: the assignment is inconsistent on whether analysis should start from the csv file or from the csv.bz2 file. I have chosen the later.
 storm.data <- read.csv(bzfile(zip.filename), 
                        colClasses=c("EVTYPE"="character"))
@@ -47,7 +47,7 @@ storm.data.filtered <- storm.data[storm.data$FATALITIES > 0 |
 
 This filtering brings the number of recorded events down from **`r dim(storm.data)[1]`** to **`r dim(storm.data.filtered)[1]`**. Also it reduces the number of unique event types from **`r length(unique(storm.data$EVTYPE))`** to **`r length(unique(storm.data.filtered$EVTYPE))`**.
 
-### Cleanup
+### Cleanup and modifications
 Even with the above data reduction the number of event types is still excessive. This is largely due to casing, spelling errors, different words for the same event etc. The following section attempts to partially clean up this column a bit. Only event types with a significant number of entries and where the change is obvious are handled.
 ```{r cleanup, echo=TRUE}
 
@@ -68,6 +68,11 @@ storm.data.filtered$EVTYPE <- event.type # Set the fixed EVTYPE's back
 
 #levels(as.factor(storm.data.filtered$EVTYPE))
 #length(levels(as.factor(storm.data.filtered$EVTYPE)))
+
+# Add a column with a proper date 
+storm.data.filtered$BEGIN_DATE <- as.Date(storm.data.filtered$BGN_DATE, format="%m/%d/%Y")
+
+ dim(storm.data.filtered[storm.data.filtered$BEGIN_DATE>as.Date('1/1/1997', format="%m/%d/%Y"), ])
 
 countToShow <- 20
 ```
@@ -115,7 +120,7 @@ p1 <- ggplot(data=fatalities.sum.per.evtype[1:10,],
     aes(x=reorder(EVTYPE, order(FATALITIES)),
         y=FATALITIES)) + 
     geom_bar(fill="#DD8888", stat="identity") +
-    xlab("Event type") +
+    xlab(NULL) +
     ylab("Total fatalities") +
     coord_flip()
 
@@ -123,10 +128,9 @@ p2 <- ggplot(data=injuries.sum.per.evtype[1:10,],
     aes(x=reorder(EVTYPE, order(INJURIES)),
         y=INJURIES)) + 
     geom_bar(fill="#DD8888", stat="identity") +
-    xlab("Event type") +
+    xlab(NULL) +
     ylab("Total injuries") +
     coord_flip()
 
 grid.arrange(p1,p2)
 ```
-
