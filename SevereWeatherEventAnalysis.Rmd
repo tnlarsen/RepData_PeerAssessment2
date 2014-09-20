@@ -28,10 +28,10 @@ if(!file.exists(zip.filename)) {
 
 ### Read data
 
-```{r read, echo=TRUE, cache=FALSE}
+```{r read, echo=TRUE, cache=TRUE}
 # Note: the assignment is inconsistent on whether analysis should start from the csv file or from the csv.bz2 file. I have chosen the later.
 storm.data <- read.csv(bzfile(zip.filename), 
-                       colClasses=c("EVTYPE"="character"))
+                       colClasses=c("EVTYPE"="character", "PROPDMGEXP"="character", "CROPDMGEXP"="character"))
 ```
 
 ### Filtering
@@ -47,10 +47,19 @@ storm.data.filtered <- storm.data[storm.data$FATALITIES > 0 |
 
 This filtering brings the number of recorded events down from **`r dim(storm.data)[1]`** to **`r dim(storm.data.filtered)[1]`**. Also it reduces the number of unique event types from **`r length(unique(storm.data$EVTYPE))`** to **`r length(unique(storm.data.filtered$EVTYPE))`**.
 
-### Cleanup and modifications
+### Cleanup and enrichment
 Even with the above data reduction the number of event types is still excessive. This is largely due to casing, spelling errors, different words for the same event etc. The following section attempts to partially clean up this column a bit. Only event types with a significant number of entries and where the change is obvious are handled.
-```{r cleanup, echo=TRUE}
 
+Furthermore, according to the [description of the data](http://www.ncdc.noaa.gov/stormevents/details.jsp "NOAA Storm Events Database description") prior to 1996 only Tornados, Thunderstorms and Hail were reported. This would seem to cause an overrepresentation of these event types and skew the results. Therefore only events occuring after 1/1/1996 are included in the analysis.
+
+```{r cleanup, echo=TRUE}
+# Add a column with a proper date 
+storm.data.filtered$BEGIN.DATE <- as.Date(storm.data.filtered$BGN_DATE, format="%m/%d/%Y")
+
+# Filter out data before 1/1/1996
+storm.data.filtered <- storm.data.filtered[storm.data.filtered$BEGIN.DATE>=as.Date('1/1/1996', format="%m/%d/%Y"), ]
+
+# Clean up event type names
 event.type <- storm.data.filtered$EVTYPE # Get the EVTYPE's
 
 event.type <- tolower(event.type)
@@ -66,14 +75,27 @@ event.type <- gsub('.*hurricane.*', 'hurricane', event.type)
 event.type <- gsub('.*rip current.*', 'rip current', event.type)
 storm.data.filtered$EVTYPE <- event.type # Set the fixed EVTYPE's back
 
-#levels(as.factor(storm.data.filtered$EVTYPE))
-#length(levels(as.factor(storm.data.filtered$EVTYPE)))
 
-# Add a column with a proper date 
-storm.data.filtered$BEGIN_DATE <- as.Date(storm.data.filtered$BGN_DATE, format="%m/%d/%Y")
 
- dim(storm.data.filtered[storm.data.filtered$BEGIN_DATE>as.Date('1/1/1997', format="%m/%d/%Y"), ])
+# Calculating the property and crop damage from the CROPDMG, CROPDMGEXP, PROPDMG and PROPDMGEXP columns. The calculation is ased on mappings found on page 12 in this PDF: http://www.ncdc.noaa.gov/stormevents/pd01016005curr.pdf
+# 0 -> 1
+# K -> 1000
+# M -> 1000000
+# B -> 1000000000
+exp.ref <- c("0" = 1, "K" = 1000, "M" = 1E6, "B" = 1E9)
 
+# Set all expononts with no value to 0
+clean.cropdmg.exp<-gsub('^$', 0, storm.data.filtered$CROPDMGEXP)
+clean.propdmg.exp<-gsub('^$', 0, storm.data.filtered$PROPDMGEXP)
+
+storm.data.filtered$CROP.DAMAGE <-
+  unname(storm.data.filtered$CROPDMG * exp.ref[clean.cropdmg.exp])
+
+storm.data.filtered$PROPERTY.DAMAGE <-
+  unname(storm.data.filtered$PROPDMG * exp.ref[clean.propdmg.exp])
+
+
+#Just to avoid a magic number in the following
 countToShow <- 20
 ```
 
@@ -95,27 +117,40 @@ These `r countToShow` event types account for **`r sum(reported.event.counts[1:c
 Aggregate the data to find the most severe event types.
 ```{r}
 fatalities.sum.per.evtype <- aggregate(FATALITIES~EVTYPE, data=storm.data.filtered, sum)
-#fatalities.mean.per.evtype <- aggregate(FATALITIES~EVTYPE, data=storm.data.filtered, mean)
+fatalities.mean.per.evtype <- aggregate(FATALITIES~EVTYPE, data=storm.data.filtered, mean)
 
 injuries.sum.per.evtype <- aggregate(INJURIES~EVTYPE, data=storm.data.filtered, sum)
-#injuries.mean.per.evtype <- aggregate(INJURIES~EVTYPE, data=storm.data.filtered, mean)
+injuries.mean.per.evtype <- aggregate(INJURIES~EVTYPE, data=storm.data.filtered, mean)
 
 fatalities.sum.per.evtype <- 
     fatalities.sum.per.evtype[order(fatalities.sum.per.evtype$FATALITIES, decreasing = TRUE), ]
 
-#fatalities.mean.per.evtype <- 
-#    fatalities.mean.per.evtype[order(fatalities.mean.per.evtype$FATALITIES, decreasing = TRUE), ]
+fatalities.mean.per.evtype <- 
+    fatalities.mean.per.evtype[order(fatalities.mean.per.evtype$FATALITIES, decreasing = TRUE), ]
 
 injuries.sum.per.evtype <- 
     injuries.sum.per.evtype[order(injuries.sum.per.evtype$INJURIES, decreasing = TRUE), ]
 
-#injuries.mean.per.evtype <- 
-#    injuries.mean.per.evtype[order(injuries.mean.per.evtype$INJURIES, decreasing = TRUE), ]
+injuries.mean.per.evtype <- 
+    injuries.mean.per.evtype[order(injuries.mean.per.evtype$INJURIES, decreasing = TRUE), ]
+
+
+propdmg.sum.per.evtype <- aggregate(PROPERTY.DAMAGE~EVTYPE, data=storm.data.filtered, sum)
+cropdmg.sum.per.evtype <- aggregate(CROP.DAMAGE~EVTYPE, data=storm.data.filtered, sum)
+
+propdmg.sum.per.evtype <- 
+    propdmg.sum.per.evtype[order(propdmg.sum.per.evtype$PROPERTY.DAMAGE, decreasing = TRUE), ]
+
+cropdmg.sum.per.evtype <- 
+    cropdmg.sum.per.evtype[order(cropdmg.sum.per.evtype$CROP.DAMAGE, decreasing = TRUE), ]
+    
 
 ```
 
+### Population health
+
 XXX: need to make it more clear that it is one figure with two plots
-```{r ten_most_health_consequences, echo=TRUE}
+```{r ten_most_health_consequences, echo=TRUE,fig.align='center', fig.scap='Highest health risk events since 1996'}
 p1 <- ggplot(data=fatalities.sum.per.evtype[1:10,], 
     aes(x=reorder(EVTYPE, order(FATALITIES)),
         y=FATALITIES)) + 
@@ -130,6 +165,49 @@ p2 <- ggplot(data=injuries.sum.per.evtype[1:10,],
     geom_bar(fill="#DD8888", stat="identity") +
     xlab(NULL) +
     ylab("Total injuries") +
+    coord_flip()
+
+grid.arrange(p1,p2)
+```
+
+XXX: need to make it more clear that it is one figure with two plots
+```{r ten_most_health_consequences, echo=TRUE,fig.align='center', fig.scap='Highest health risk events since 1996'}
+p1 <- ggplot(data=fatalities.mean.per.evtype[1:10,], 
+    aes(x=reorder(EVTYPE, order(FATALITIES)),
+        y=FATALITIES)) + 
+    geom_bar(fill="#DD8888", stat="identity") +
+    xlab(NULL) +
+    ylab("Mean fatalities") +
+    coord_flip()
+
+p2 <- ggplot(data=injuries.mean.per.evtype[1:10,], 
+    aes(x=reorder(EVTYPE, order(INJURIES)),
+        y=INJURIES)) + 
+    geom_bar(fill="#DD8888", stat="identity") +
+    xlab(NULL) +
+    ylab("Mean injuries") +
+    coord_flip()
+
+grid.arrange(p1,p2)
+```
+
+### Economic consequeces
+XXX: need to make it more clear that it is one figure with two plots
+```{r ten_most_economic_consequence, echo=TRUE,fig.align='center', fig.scap='Highest economic consequence events since 1996'}
+p1 <- ggplot(data=cropdmg.sum.per.evtype[1:10,], 
+    aes(x=reorder(EVTYPE, order(CROP.DAMAGE)),
+        y=CROP.DAMAGE)) + 
+    geom_bar(fill="#DD8888", stat="identity") +
+    xlab(NULL) +
+    ylab("Crop damage (US $)") +
+    coord_flip()
+
+p2 <- ggplot(data=propdmg.sum.per.evtype[1:10,], 
+    aes(x=reorder(EVTYPE, order(PROPERTY.DAMAGE)),
+        y=PROPERTY.DAMAGE)) + 
+    geom_bar(fill="#DD8888", stat="identity") +
+    xlab(NULL) +
+    ylab("Property damage (US $)") +
     coord_flip()
 
 grid.arrange(p1,p2)
