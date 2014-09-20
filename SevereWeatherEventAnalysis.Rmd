@@ -1,8 +1,15 @@
-# Severe Weather Event Analysis - NOAA Storm Database
+# Severe Weather Analysis - harmful event types
 
 ## Synopsis
+This investigation explores the storm data from the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm data base. Based on the data bases estimates of fatalities, injuries, crop and property damage we find the most harmful event types. The relative harmfulness of an event type being determined by the total damage caused by it. 
+
+Due to changes over time in the way the data in the data base has been collected only data newer than 1996 is used in the investigation.
+
+The investigation finds that the most harmful events with respect to population health are "heat" and "tornado" with respect to both fatalities and injuries. With respect to crop and property damage the most harmful event types are "drought", "flood" and "hurricane".
 
 ## Data Processing
+
+### Initialise packages
 
 ```{r initialization, echo=TRUE}
 library(stringr)
@@ -31,7 +38,9 @@ if(!file.exists(zip.filename)) {
 ```{r read, echo=TRUE, cache=TRUE}
 # Note: the assignment is inconsistent on whether analysis should start from the csv file or from the csv.bz2 file. I have chosen the later.
 storm.data <- read.csv(bzfile(zip.filename), 
-                       colClasses=c("EVTYPE"="character", "PROPDMGEXP"="character", "CROPDMGEXP"="character"))
+                       colClasses=c("EVTYPE"="character", 
+                                    "PROPDMGEXP"="character", 
+                                    "CROPDMGEXP"="character"))
 ```
 
 ### Filtering
@@ -75,9 +84,8 @@ event.type <- gsub('.*hurricane.*', 'hurricane', event.type)
 event.type <- gsub('.*rip current.*', 'rip current', event.type)
 storm.data.filtered$EVTYPE <- event.type # Set the fixed EVTYPE's back
 
-
-
-# Calculating the property and crop damage from the CROPDMG, CROPDMGEXP, PROPDMG and PROPDMGEXP columns. The calculation is ased on mappings found on page 12 in this PDF: http://www.ncdc.noaa.gov/stormevents/pd01016005curr.pdf
+# Calculating the property and crop damage from the CROPDMG, CROPDMGEXP, PROPDMG and PROPDMGEXP columns. The calculation is 
+# based on mappings found on page 12 in this PDF: http://www.ncdc.noaa.gov/stormevents/pd01016005curr.pdf
 # 0 -> 1
 # K -> 1000
 # M -> 1000000
@@ -94,9 +102,8 @@ storm.data.filtered$CROP.DAMAGE <-
 storm.data.filtered$PROPERTY.DAMAGE <-
   unname(storm.data.filtered$PROPDMG * exp.ref[clean.propdmg.exp])
 
-
 #Just to avoid a magic number in the following
-countToShow <- 20
+countToShow <- 10
 ```
 
 The result of the above cleanup is that the data now contains **`r length(unique(storm.data.filtered$EVTYPE))`** unique event types. The `r countToShow` most recorded event types are listed in the below table: 
@@ -115,36 +122,18 @@ These `r countToShow` event types account for **`r sum(reported.event.counts[1:c
 
 ## Results
 Aggregate the data to find the most severe event types.
-```{r}
+```{r aggregate_and_sort, echo=TRUE}
 fatalities.sum.per.evtype <- aggregate(FATALITIES~EVTYPE, data=storm.data.filtered, sum)
-fatalities.mean.per.evtype <- aggregate(FATALITIES~EVTYPE, data=storm.data.filtered, mean)
+fatalities.sum.per.evtype <- fatalities.sum.per.evtype[order(fatalities.sum.per.evtype$FATALITIES, decreasing = TRUE), ]
 
 injuries.sum.per.evtype <- aggregate(INJURIES~EVTYPE, data=storm.data.filtered, sum)
-injuries.mean.per.evtype <- aggregate(INJURIES~EVTYPE, data=storm.data.filtered, mean)
-
-fatalities.sum.per.evtype <- 
-    fatalities.sum.per.evtype[order(fatalities.sum.per.evtype$FATALITIES, decreasing = TRUE), ]
-
-fatalities.mean.per.evtype <- 
-    fatalities.mean.per.evtype[order(fatalities.mean.per.evtype$FATALITIES, decreasing = TRUE), ]
-
-injuries.sum.per.evtype <- 
-    injuries.sum.per.evtype[order(injuries.sum.per.evtype$INJURIES, decreasing = TRUE), ]
-
-injuries.mean.per.evtype <- 
-    injuries.mean.per.evtype[order(injuries.mean.per.evtype$INJURIES, decreasing = TRUE), ]
-
+injuries.sum.per.evtype <- injuries.sum.per.evtype[order(injuries.sum.per.evtype$INJURIES, decreasing = TRUE), ]
 
 propdmg.sum.per.evtype <- aggregate(PROPERTY.DAMAGE~EVTYPE, data=storm.data.filtered, sum)
+propdmg.sum.per.evtype <- propdmg.sum.per.evtype[order(propdmg.sum.per.evtype$PROPERTY.DAMAGE, decreasing = TRUE), ]
+
 cropdmg.sum.per.evtype <- aggregate(CROP.DAMAGE~EVTYPE, data=storm.data.filtered, sum)
-
-propdmg.sum.per.evtype <- 
-    propdmg.sum.per.evtype[order(propdmg.sum.per.evtype$PROPERTY.DAMAGE, decreasing = TRUE), ]
-
-cropdmg.sum.per.evtype <- 
-    cropdmg.sum.per.evtype[order(cropdmg.sum.per.evtype$CROP.DAMAGE, decreasing = TRUE), ]
-    
-
+cropdmg.sum.per.evtype <- cropdmg.sum.per.evtype[order(cropdmg.sum.per.evtype$CROP.DAMAGE, decreasing = TRUE), ]
 ```
 
 ### Population health
@@ -165,27 +154,6 @@ p2 <- ggplot(data=injuries.sum.per.evtype[1:10,],
     geom_bar(fill="#DD8888", stat="identity") +
     xlab(NULL) +
     ylab("Total injuries") +
-    coord_flip()
-
-grid.arrange(p1,p2)
-```
-
-XXX: need to make it more clear that it is one figure with two plots
-```{r ten_most_health_consequences, echo=TRUE,fig.align='center', fig.scap='Highest health risk events since 1996'}
-p1 <- ggplot(data=fatalities.mean.per.evtype[1:10,], 
-    aes(x=reorder(EVTYPE, order(FATALITIES)),
-        y=FATALITIES)) + 
-    geom_bar(fill="#DD8888", stat="identity") +
-    xlab(NULL) +
-    ylab("Mean fatalities") +
-    coord_flip()
-
-p2 <- ggplot(data=injuries.mean.per.evtype[1:10,], 
-    aes(x=reorder(EVTYPE, order(INJURIES)),
-        y=INJURIES)) + 
-    geom_bar(fill="#DD8888", stat="identity") +
-    xlab(NULL) +
-    ylab("Mean injuries") +
     coord_flip()
 
 grid.arrange(p1,p2)
