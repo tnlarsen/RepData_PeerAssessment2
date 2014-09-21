@@ -212,7 +212,7 @@ caption <- tableGrob(matrix(expression(
             )
     )
 
-grid.arrange(p1,p2)
+grid.arrange(p1,p2, sub=caption)
 ```
 
 The results here are more mixed than in the previous comparison. But "drought" is clearly the most damaging event type for crop while "flood" is most damaging to property. In both categories "hurricane" is the second most damaging event type.
