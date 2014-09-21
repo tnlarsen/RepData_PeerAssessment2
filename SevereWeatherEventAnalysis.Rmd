@@ -1,7 +1,7 @@
 # Severe Weather Analysis - harmful event types
 
 ## Synopsis
-This investigation explores the storm data from the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm data base. Based on the estimates of fatalities, injuries, crop and property damage we find the most harmful event types. For this analysis the relative harmfulness of an event type is being determined by comparing the total damage caused in the years included in the analysis.
+This investigation explores storm data from the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm data base. Based on estimates of fatalities, injuries, crop and property damage we find the most harmful event types. For this analysis the relative harmfulness of an event type is being determined by comparing the total damage caused in the years included in the analysis.
 
 Due to changes over time in the way the data has been collected only data newer than 1996 is used in the investigation.
 
@@ -17,7 +17,7 @@ The following initialises the R packages used in the following.
 library(stringr)
 library(knitr)
 library(ggplot2)
-library(gridExtra)
+library(gridExtra, quietly = TRUE)
 ```
 
 ### Download data
@@ -36,7 +36,7 @@ if(!file.exists(zip.filename)) {
 ```
 
 ### Read data
-The data is read from the downloaded csv.vz2 file.
+The data is read from the downloaded csv.bz2 file.
 
 ```{r read, echo=TRUE, cache=TRUE}
 # Note: the assignment is inconsistent on whether analysis should start from the csv file or from the csv.bz2 file. I have chosen the later.
@@ -93,7 +93,7 @@ storm.data.filtered$EVTYPE <- event.type # Set the fixed EVTYPE's back
 countToShow <- 10
 ```
 
-The result of the above cleanup is that the data now contains **`r length(unique(storm.data.filtered$EVTYPE))`** unique event types. The `r countToShow` most recorded event types are listed in the below table: 
+The result of the above cleanup is that the data now contains **`r dim(storm.data.filtered)[1]`** events spread over **`r length(unique(storm.data.filtered$EVTYPE))`** unique event types. The `r countToShow` most recorded event types are listed in the below table: 
 
 ```{r count_types, echo=TRUE, results='asis'}
 types.rle <- rle(storm.data.filtered$EVTYPE[(order(storm.data.filtered$EVTYPE))])
@@ -107,11 +107,12 @@ kable(head(reported.event.counts[,1:2], n=countToShow), format="markdown")
 These `r countToShow` event types account for **`r sum(reported.event.counts[1:countToShow,2])`** events corresponding to **`r sum(reported.event.counts[1:countToShow,2])/dim(storm.data.filtered)[1]*100`%** of the filtered data. Further investigations of the event types could reduce the number of types further but it does not seem necessary for the analysis.
 
 ### Enrichment
-The crop and property damages are each reported in two separate columns. E.g. the crop damage is reported in columns `CROPDMG` and `CROPDMGEXP`. One columns contains the number value, the other contains the exponent. In order to easiser perform comparisons two new columns containing the converted values is added.
+The crop and property damages are each reported in two separate columns. E.g. the crop damage is reported in columns `CROPDMG` and `CROPDMGEXP`. One column contains the number value, the other contains the exponent. In order to easiser perform comparisons two new columns containing the converted values is added.
 
 ```{r enrichment, echo=TRUE}
 
-# Calculating the property and crop damage from the CROPDMG, CROPDMGEXP, PROPDMG and PROPDMGEXP columns. The calculation is based on mappings found on page 12 in the PDF referenced together with the data base.
+# Calculating the property and crop damage from the CROPDMG, CROPDMGEXP, PROPDMG and PROPDMGEXP columns. 
+# The calculation is based on mappings found on page 12 in the PDF referenced together with the data base.
 # 0 -> 1
 # K -> 1000
 # M -> 1000000
@@ -132,7 +133,8 @@ storm.data.filtered$PROPERTY.DAMAGE <-
 ```
 
 ## Results
-Aggregate the data to find the most severe event types.
+The following section contains the result of the data analysis. First the data is aggregated to create new data sets containing summations of the data for the four parameters used for determining population health and economic consequences.
+
 ```{r aggregate_and_sort, echo=TRUE}
 fatalities.sum.per.evtype <- aggregate(FATALITIES~EVTYPE, data=storm.data.filtered, sum)
 fatalities.sum.per.evtype <- fatalities.sum.per.evtype[order(fatalities.sum.per.evtype$FATALITIES, decreasing = TRUE), ]
@@ -148,8 +150,8 @@ cropdmg.sum.per.evtype <- cropdmg.sum.per.evtype[order(cropdmg.sum.per.evtype$CR
 ```
 
 ### Population health
+We can now compare the health consequences for the various event types. This is done in figure 1. 
 
-XXX: need to make it more clear that it is one figure with two plots
 ```{r ten_most_health_consequences, echo=TRUE,fig.align='center', fig.scap='Highest health risk events since 1996'}
 p1 <- ggplot(data=fatalities.sum.per.evtype[1:10,], 
     aes(x=reorder(EVTYPE, order(FATALITIES)),
@@ -167,19 +169,24 @@ p2 <- ggplot(data=injuries.sum.per.evtype[1:10,],
     ylab("Total injuries") +
     coord_flip()
 
-caption <- tableGrob(matrix(expression(paste("Figure 1: Population health"))),
-                     parse = TRUE, theme = 
-                       theme.list(
-                         gpar.corefill = gpar(fill = NA, col = NA),
-                         core.just = "center"
-                       )
-                    )
+caption <- tableGrob(matrix(expression(
+    paste("Figure 1: Event types with highest population health consequence since 1996"))),
+    parse = TRUE, theme = 
+        theme.list(
+            gpar.corefill = gpar(fill = NA, col = NA),
+            core.just = "center"
+            )
+    )
+
 grid.arrange(p1,p2, sub=caption)
 ```
 
+It can be seen from the figure that event types "heat" and "tornado" are the most lethal event types when examining the total number of fatalities. With respect to injuries the the event type "tornado" is clearly the event type with largest consequences having caused more than twice as many injuries as number two on the list.
+
 ### Economic consequeces
-XXX: need to make it more clear that it is one figure with two plots
-```{r ten_most_economic_consequence, echo=TRUE,fig.align='center', fig.scap='Highest economic consequence events since 1996'}
+Next we compare the economic consequences for the various event types. This is done in figure 2. 
+
+```{r economic_consequence, echo=TRUE,fig.align='center'}
 p1 <- ggplot(data=cropdmg.sum.per.evtype[1:10,], 
     aes(x=reorder(EVTYPE, order(CROP.DAMAGE)),
         y=CROP.DAMAGE)) + 
@@ -196,13 +203,16 @@ p2 <- ggplot(data=propdmg.sum.per.evtype[1:10,],
     ylab("Property damage (US $)") +
     coord_flip()
 
-caption <- tableGrob(matrix(expression(paste("Figure 2: Economic consequences"))),
-                     parse = TRUE, theme = 
-                       theme.list(
-                         gpar.corefill = gpar(fill = NA, col = NA),
-                         core.just = "center"
-                       )
-                    )
+caption <- tableGrob(matrix(expression(
+    paste("Figure 2: Event types with highest economic consequence since 1996"))),
+    parse = TRUE, theme = 
+        theme.list(
+            gpar.corefill = gpar(fill = NA, col = NA),
+            core.just = "center"
+            )
+    )
 
 grid.arrange(p1,p2)
 ```
+
+The results here are more mixed than in the previous comparison. But "drought" is clearly the most damaging event type for crop while "flood" is most damaging to property. In both categories "hurricane" is the second most damaging event type.
