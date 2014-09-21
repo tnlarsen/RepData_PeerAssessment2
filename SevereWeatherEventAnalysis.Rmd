@@ -18,6 +18,7 @@ library(stringr)
 library(knitr)
 library(ggplot2)
 library(gridExtra, quietly = TRUE)
+library(scales)
 ```
 
 ### Download data
@@ -49,11 +50,19 @@ storm.data <- read.csv(bzfile(zip.filename),
 ### Filtering
 This analysis will address questions regarding population health and economic consequences. Therefore it is reasonable to only consider events where either fatalities, injuries, property damage, crop damage or any combination of these were recorded. As a result the data is filtered based on these criteria.
 
+Furthermore, according to the [description of the data](http://www.ncdc.noaa.gov/stormevents/details.jsp "NOAA Storm Events Database description") only Tornados, Thunderstorms and Hail were reported prior to 1996. This would seem to cause an overrepresentation of these event types and skew the results. Therefore only events occuring after 1/1/1996 are included in the analysis.
+
 ```{r filter, echo=TRUE}
 storm.data.filtered <- storm.data[storm.data$FATALITIES > 0 | 
                                       storm.data$INJURIES > 0 | 
                                       storm.data$PROPDMG > 0 | 
                                       storm.data$CROPDMG > 0, ]
+
+# Add a column with a proper date 
+storm.data.filtered$BEGIN.DATE <- as.Date(storm.data.filtered$BGN_DATE, format="%m/%d/%Y")
+
+# Filter out data before 1/1/1996
+storm.data.filtered <- storm.data.filtered[storm.data.filtered$BEGIN.DATE>=as.Date('1/1/1996', format="%m/%d/%Y"), ]
 
 ```
 
@@ -62,16 +71,9 @@ This filtering brings the number of recorded events down from **`r dim(storm.dat
 ### Cleanup
 Even with the above data reduction the number of event types is still excessive. This is largely due to casing, spelling errors, different words for the same event etc. The following section attempts to partially clean up this column. Only event types with a significant number of entries and where the change is obvious are handled.
 
-Furthermore, according to the [description of the data](http://www.ncdc.noaa.gov/stormevents/details.jsp "NOAA Storm Events Database description") only Tornados, Thunderstorms and Hail were reported prior to 1996. This would seem to cause an overrepresentation of these event types and skew the results. Therefore only events occuring after 1/1/1996 are included in the analysis.
-
-The subsetting and event type reduction is performed in the following section.
+The event type reduction is performed in the following section.
 
 ```{r cleanup, echo=TRUE}
-# Add a column with a proper date 
-storm.data.filtered$BEGIN.DATE <- as.Date(storm.data.filtered$BGN_DATE, format="%m/%d/%Y")
-
-# Filter out data before 1/1/1996
-storm.data.filtered <- storm.data.filtered[storm.data.filtered$BEGIN.DATE>=as.Date('1/1/1996', format="%m/%d/%Y"), ]
 
 # Clean up event type names
 event.type <- storm.data.filtered$EVTYPE # Get the EVTYPE's
@@ -93,7 +95,7 @@ storm.data.filtered$EVTYPE <- event.type # Set the fixed EVTYPE's back
 countToShow <- 10
 ```
 
-The result of the above cleanup is that the data now contains **`r dim(storm.data.filtered)[1]`** events spread over **`r length(unique(storm.data.filtered$EVTYPE))`** unique event types. The `r countToShow` most recorded event types are listed in the below table: 
+The result of the above cleanup is that the data now contains **`r length(unique(storm.data.filtered$EVTYPE))`** unique event types. The `r countToShow` most recorded event types are listed in the below table: 
 
 ```{r count_types, echo=TRUE, results='asis'}
 types.rle <- rle(storm.data.filtered$EVTYPE[(order(storm.data.filtered$EVTYPE))])
@@ -170,7 +172,7 @@ p2 <- ggplot(data=injuries.sum.per.evtype[1:10,],
     coord_flip()
 
 caption <- tableGrob(matrix(expression(
-    paste("Figure 1: Event types with highest population health consequence since 1996"))),
+    paste("Figure 1: Event types with highest population health consequences since 1996"))),
     parse = TRUE, theme = 
         theme.list(
             gpar.corefill = gpar(fill = NA, col = NA),
@@ -189,22 +191,24 @@ Next we compare the economic consequences for the various event types. This is d
 ```{r economic_consequence, echo=TRUE,fig.align='center'}
 p1 <- ggplot(data=cropdmg.sum.per.evtype[1:10,], 
     aes(x=reorder(EVTYPE, order(CROP.DAMAGE)),
-        y=CROP.DAMAGE)) + 
+        y=CROP.DAMAGE/1e9)) + 
     geom_bar(fill="#DD8888", stat="identity") +
     xlab(NULL) +
-    ylab("Crop damage (US $)") +
-    coord_flip()
+    ylab("Crop damage (Billion US $)") +
+    coord_flip() +
+    scale_y_continuous(labels = comma)
 
 p2 <- ggplot(data=propdmg.sum.per.evtype[1:10,], 
     aes(x=reorder(EVTYPE, order(PROPERTY.DAMAGE)),
-        y=PROPERTY.DAMAGE)) + 
+        y=PROPERTY.DAMAGE/1e9)) + 
     geom_bar(fill="#DD8888", stat="identity") +
     xlab(NULL) +
-    ylab("Property damage (US $)") +
-    coord_flip()
+    ylab("Property damage (Billion US $)") +
+    coord_flip() +
+    scale_y_continuous(labels = comma)
 
 caption <- tableGrob(matrix(expression(
-    paste("Figure 2: Event types with highest economic consequence since 1996"))),
+    paste("Figure 2: Event types with highest economic consequences since 1996"))),
     parse = TRUE, theme = 
         theme.list(
             gpar.corefill = gpar(fill = NA, col = NA),
